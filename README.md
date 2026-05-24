@@ -1,7 +1,7 @@
 # Azure FinOps MCP Server
 
-An MCP server that gives LLM clients (Claude Desktop, Claude Code) conversational
-access to Azure cost analysis, budget tracking, forecasting, and resource
+An MCP server that gives LLM clients (Claude Desktop, Claude Code, VS Code, Cursor)
+conversational access to Azure cost analysis, budget tracking, forecasting, and resource
 optimization — across multiple subscriptions.
 
 ## Tools
@@ -44,10 +44,53 @@ optimization — across multiple subscriptions.
 
 - Python 3.11+
 - Azure CLI installed and logged in (`az login`)
-- These RBAC roles on each subscription you want to query:
-  - **Cost Management Reader** — cost, forecast, budget queries
-  - **Reader** — resource inventory via Resource Graph
-  - **Monitoring Reader** — VM utilization metrics
+
+## Azure RBAC Permissions
+
+The identity running this server (your user, a service principal, or a managed identity)
+needs three roles assigned on **each subscription** you want to query:
+
+| Role | Purpose |
+|---|---|
+| **Cost Management Reader** | Cost analysis, forecasting, budget queries |
+| **Reader** | Resource inventory via Resource Graph |
+| **Monitoring Reader** | VM utilization metrics via Azure Monitor |
+
+### Assign via Azure CLI
+
+```bash
+SUBSCRIPTION_ID="<your-subscription-id>"
+PRINCIPAL_ID="<object-id-of-user-sp-or-managed-identity>"
+
+for ROLE in "Cost Management Reader" "Reader" "Monitoring Reader"; do
+  az role assignment create \
+    --assignee "$PRINCIPAL_ID" \
+    --role "$ROLE" \
+    --scope "/subscriptions/$SUBSCRIPTION_ID"
+done
+```
+
+Repeat for each subscription listed in `AZURE_ALLOWED_SUBSCRIPTIONS`.
+
+### Local development (your own user)
+
+```bash
+az login
+az account set --subscription "<your-subscription-id>"
+
+# Check your object ID
+az ad signed-in-user show --query id -o tsv
+```
+
+Your user already has these roles if you're a subscription Owner or Contributor.
+If not, ask your Azure admin to assign them.
+
+### Managed Identity (Container Apps deployment)
+
+After deploying with `deploy.sh`, the script automatically assigns these three roles
+to the Container App's system-assigned managed identity on each allowed subscription.
+No credentials or secrets are needed — `DefaultAzureCredential` picks up the
+managed identity automatically at runtime.
 
 ## Install
 
@@ -91,13 +134,27 @@ In the Inspector UI:
 4. Try `list_subscriptions` first (no arguments needed)
 5. Try `get_month_to_date_cost` (no arguments needed — uses default sub)
 
-## Register with Claude Desktop
+## Client Configuration
+
+Find the absolute path to your venv's Python first — you'll need it in every config below:
+
+```bash
+# With your venv activated:
+which python3
+# e.g. /Users/yourname/azure-finops-mcp/.venv/bin/python3
+```
+
+---
+
+### Claude Desktop
 
 Edit `claude_desktop_config.json`:
 
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-- **Linux:** `~/.config/Claude/claude_desktop_config.json`
+| OS | Path |
+|---|---|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
 
 ```json
 {
@@ -115,10 +172,102 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-**Important:** Use the absolute path to your venv's `python3`, not just `python3`.
-Find it with `which python3` (with your venv activated).
+Restart Claude Desktop. A tool icon in the chat input confirms the server connected.
 
-Restart Claude Desktop. You should see a tool icon indicating the server connected.
+---
+
+### VS Code (GitHub Copilot / Agent mode)
+
+Create `.vscode/mcp.json` in your workspace (or add to user `settings.json` under `"mcp"`):
+
+```json
+{
+  "servers": {
+    "azure-finops": {
+      "type": "stdio",
+      "command": "/absolute/path/to/.venv/bin/python3",
+      "args": ["-m", "azure_finops_mcp.server"],
+      "env": {
+        "AZURE_ALLOWED_SUBSCRIPTIONS": "sub-1,sub-2,sub-3",
+        "AZURE_DEFAULT_SUBSCRIPTION": "sub-1",
+        "FINOPS_CACHE_TTL_SECONDS": "900"
+      }
+    }
+  }
+}
+```
+
+Requires VS Code 1.99+ with the **GitHub Copilot** extension. Open the Chat panel,
+switch to **Agent** mode, and the `azure-finops` tools will appear automatically.
+
+---
+
+### Cursor
+
+Create or edit `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "azure-finops": {
+      "command": "/absolute/path/to/.venv/bin/python3",
+      "args": ["-m", "azure_finops_mcp.server"],
+      "env": {
+        "AZURE_ALLOWED_SUBSCRIPTIONS": "sub-1,sub-2,sub-3",
+        "AZURE_DEFAULT_SUBSCRIPTION": "sub-1",
+        "FINOPS_CACHE_TTL_SECONDS": "900"
+      }
+    }
+  }
+}
+```
+
+Or add it via **Cursor Settings → MCP → Add new global MCP server**.
+Restart Cursor. The tools appear in Cursor's Agent/Composer panel.
+
+---
+
+### Claude Code (CLI)
+
+```bash
+claude mcp add azure-finops \
+  /absolute/path/to/.venv/bin/python3 \
+  -m azure_finops_mcp.server \
+  -e AZURE_ALLOWED_SUBSCRIPTIONS=sub-1,sub-2,sub-3 \
+  -e AZURE_DEFAULT_SUBSCRIPTION=sub-1
+```
+
+---
+
+### Remote HTTP (after deploying to Azure Container Apps)
+
+All clients support connecting to the deployed server over HTTP — no local Python needed:
+
+**Claude Desktop / Cursor** — add to the same config files above:
+```json
+{
+  "mcpServers": {
+    "azure-finops": {
+      "type": "http",
+      "url": "https://<your-container-app-fqdn>/mcp"
+    }
+  }
+}
+```
+
+**VS Code** — in `.vscode/mcp.json`:
+```json
+{
+  "servers": {
+    "azure-finops": {
+      "type": "http",
+      "url": "https://<your-container-app-fqdn>/mcp"
+    }
+  }
+}
+```
+
+**Claude Web** — Settings → Integrations → Add → `https://<your-container-app-fqdn>/mcp`
 
 ## Example Prompts
 
@@ -137,18 +286,20 @@ Try these once connected:
 ## Architecture
 
 ```
-Claude Desktop ◄──stdio──► Azure FinOps MCP Server ◄──REST──► Azure APIs
-                              │
-                              ├── config.py          ← env + allowlist
-                              ├── azure_clients.py   ← shared credential
-                              ├── cache.py           ← TTL cache
-                              ├── server.py          ← FastMCP + registration
-                              └── tools/
-                                  ├── subscriptions  ← discovery
-                                  ├── cost           ← queries + portfolio
-                                  ├── budgets        ← budget status
-                                  ├── optimization   ← idle + advisor + metrics
-                                  └── forecast       ← predictions
+Claude Desktop ◄─┐
+VS Code        ◄─┤
+Cursor         ◄─┼──stdio / HTTP──► Azure FinOps MCP Server ◄──REST──► Azure APIs
+Claude Code    ◄─┤                        │
+Claude Web     ◄─┘                        ├── config.py          ← env + allowlist
+                                          ├── azure_clients.py   ← shared credential
+                                          ├── cache.py           ← TTL cache
+                                          ├── server.py          ← FastMCP + registration
+                                          └── tools/
+                                              ├── subscriptions  ← discovery
+                                              ├── cost           ← queries + portfolio
+                                              ├── budgets        ← budget status
+                                              ├── optimization   ← idle + advisor + metrics
+                                              └── forecast       ← predictions
 ```
 
 ### Key design decisions
