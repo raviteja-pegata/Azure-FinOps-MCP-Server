@@ -1,5 +1,7 @@
 # Azure FinOps MCP Server
 
+<!-- mcp-name: io.github.raviteja-pegata/azure-finops-mcp -->
+
 An MCP server that gives LLM clients (Claude Desktop, Claude Code, VS Code, Cursor)
 conversational access to Azure cost analysis, budget tracking, forecasting, and resource
 optimization — across multiple subscriptions.
