@@ -42,6 +42,32 @@ optimization — across multiple subscriptions.
 | `forecast_month_end_spend` | Predicted month-end cost (single sub) |
 | `forecast_portfolio_month_end_spend` | Predicted month-end cost across ALL subs |
 
+## Quick Install
+
+```bash
+pip install azure-finops-mcp
+```
+
+Then add it to your MCP client config using the installed command — no cloning needed:
+
+```json
+{
+  "mcpServers": {
+    "azure-finops": {
+      "command": "azure-finops-mcp",
+      "env": {
+        "AZURE_ALLOWED_SUBSCRIPTIONS": "sub-id-1,sub-id-2",
+        "AZURE_DEFAULT_SUBSCRIPTION": "sub-id-1"
+      }
+    }
+  }
+}
+```
+
+See the [Client Configuration](#client-configuration) section below for per-client config file locations.
+
+---
+
 ## Prerequisites
 
 - Python 3.11+
