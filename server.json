@@ -1,0 +1,44 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.raviteja-pegata/azure-finops-mcp",
+  "title": "Azure FinOps MCP Server",
+  "description": "MCP server for Azure cost analysis, budget tracking, forecasting, and resource optimization across multiple subscriptions. Works with Claude, VS Code, and Cursor.",
+  "repository": {
+    "url": "https://github.com/raviteja-pegata/Azure-FinOps-MCP-Server",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "azure-finops-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AZURE_ALLOWED_SUBSCRIPTIONS",
+          "description": "Comma-separated list of Azure subscription IDs this server may query",
+          "isRequired": true,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "AZURE_DEFAULT_SUBSCRIPTION",
+          "description": "Default subscription ID used when none is specified in a query (must be in AZURE_ALLOWED_SUBSCRIPTIONS)",
+          "isRequired": true,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "FINOPS_CACHE_TTL_SECONDS",
+          "description": "TTL for cost query cache in seconds (default: 900)",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
