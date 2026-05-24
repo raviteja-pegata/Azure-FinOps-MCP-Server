@@ -1,0 +1,11 @@
+.venv
+src/azure_finops_mcp/.venv
+__pycache__
+*.pyc
+*.pyo
+.env
+.env.*
+tests/
+*.md
+.git
+.gitignore
