@@ -23,6 +23,15 @@ dependencies = [
 [project.scripts]
 azure-finops-mcp = "azure_finops_mcp.server:main"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
